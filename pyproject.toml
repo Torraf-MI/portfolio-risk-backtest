@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "portfolio-risk-backtest"
+version = "0.1.0"
+description = "Analisi del rischio di portafoglio e backtest: VaR/CVaR con sei metodi, convalida dei modelli, stress test, confronto tra strategie (60/40, risk parity, volatilità obiettivo)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Francesco Torraco" }]
+keywords = ["value at risk", "expected shortfall", "garch", "stress test", "backtest", "risk parity", "risk management"]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "pandas>=2.2",
+    "statsmodels>=0.14",
+    "plotly>=5.20",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+yahoo = ["yfinance>=0.2.40"]
+png = ["kaleido>=1.0"]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.scripts]
+risk-backtest = "risk_backtest.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+risk_backtest = ["templates/*.j2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B905"]

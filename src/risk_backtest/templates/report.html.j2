@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analisi del rischio – {{ client }}</title>
+{% if plotly_inline %}<script>{{ plotly_inline | safe }}</script>{% else %}<script src="{{ plotly_cdn }}"></script>{% endif %}
+<style>
+  :root { --blu: #1f4e79; --grigio: #595959; --chiaro: #f2f5f9; }
+  body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; color: #222; max-width: 980px;
+         margin: 0 auto; padding: 32px 16px 60px; line-height: 1.5; background: #fff; }
+  header { border-bottom: 3px solid var(--blu); padding-bottom: 12px; margin-bottom: 24px; }
+  h1 { color: var(--blu); margin: 0 0 4px; font-size: 1.7rem; }
+  h2 { color: var(--blu); font-size: 1.2rem; margin-top: 36px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+  h3 { font-size: 1rem; margin: 22px 0 6px; }
+  .sub { color: var(--grigio); font-size: .95rem; }
+  .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 16px 0; }
+  .kpi div { background: var(--chiaro); border-radius: 8px; padding: 12px 14px; }
+  .kpi b { display: block; font-size: 1.45rem; color: var(--blu); }
+  .kpi span { font-size: .8rem; color: var(--grigio); text-transform: uppercase; letter-spacing: .03em; }
+  .esito { border-left: 5px solid; padding: 12px 16px; border-radius: 4px; margin: 16px 0; }
+  .esito.ok { border-color: #0ca30c; background: #eef8ee; }
+  .esito.attenzione { border-color: #fab219; background: #fff8e8; }
+  .esito.ko { border-color: #d03b3b; background: #fcefef; }
+  .esito b::before { margin-right: 6px; }
+  .esito.ok b::before { content: "✓"; color: #0ca30c; }
+  .esito.attenzione b::before { content: "!"; color: #b07800; }
+  .esito.ko b::before { content: "✕"; color: #d03b3b; }
+  .due { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; margin: 10px 0; }
+  th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid #e5e5e5; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: var(--blu); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  tr.forte td { font-weight: 600; }
+  td.neg { color: #c0392b; } td.pos { color: #1e7d32; }
+  .scroll { overflow-x: auto; }
+  .scroll table { white-space: nowrap; }
+  .grafico { margin: 14px 0; overflow: hidden; }
+  .semaforo { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: .8rem; font-weight: 600; }
+  .Verde { background: #e3f4e3; color: #0a7a0a; } .Giallo { background: #fff2cc; color: #8a6100; }
+  .Rosso { background: #fbe1e1; color: #b02a2a; }
+  .note { font-size: .8rem; color: var(--grigio); background: var(--chiaro); padding: 12px 14px; border-radius: 6px; }
+  ul { padding-left: 20px; }
+  @media print { .grafico { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Analisi del rischio e backtest</h1>
+  <div class="sub">Portafoglio di <b>{{ importo }}</b> · preparata per <b>{{ client }}</b> · {{ today }} · dati dal {{ periodo }}</div>
+</header>
+
+<h2>Sintesi</h2>
+<div class="esito {{ esito }}"><b>Esito</b> {{ sintesi }}</div>
+<div class="kpi">
+  {% for label, value in kpi %}<div><span>{{ label }}</span><b>{{ value }}</b></div>{% endfor %}
+</div>
+<div class="due">
+<div>
+<p>Il <b>VaR</b> (Value at Risk) è la perdita che, con le condizioni del passato, non si supera in {{ livello_casi }}
+casi su 100. Il <b>CVaR</b> risponde alla domanda successiva: <i>quando</i> va peggio del VaR, quanto si perde in
+media? È la misura che guarda davvero alla coda delle perdite, ed è quella usata dalle autorità di vigilanza.</p>
+<p>Gli importi sono calcolati sul portafoglio attuale, ribilanciato ai pesi indicati, e sui prezzi storici degli
+strumenti: rappresentano ordini di grandezza, non previsioni.</p>
+</div>
+<div>
+<table>
+  <tr><th>Asset</th><th>Peso</th><th>Controvalore</th></tr>
+  {% for p in pesi %}<tr><td>{{ p.nome }}</td><td>{{ p.peso }}</td><td>{{ p.eur }}</td></tr>{% endfor %}
+</table>
+</div>
+</div>
+
+<h2>Quanto si può perdere</h2>
+<p>I rendimenti giornalieri del portafoglio non seguono la curva normale: hanno un'asimmetria di {{ asimmetria }} e
+una curtosi in eccesso di {{ curtosi }}, cioè le giornate molto negative sono più frequenti di quanto la normale
+preveda. Per questo il VaR va stimato con più metodi.</p>
+<div class="grafico">{{ grafici.distribuzione | safe }}</div>
+<div class="grafico">{{ grafici.metodi | safe }}</div>
+<div class="scroll">
+<table>
+  <tr><th>Metodo</th><th>VaR a un giorno</th><th>VaR a {{ orizzonte }}</th><th>in %</th><th>CVaR a {{ orizzonte }}</th><th>Volatilità annua</th></tr>
+  {% for m in metodi %}
+  <tr><td>{{ m.nome }}</td><td>{{ m.var1 }}</td><td>{{ m.varh }}</td><td>{{ m.pct }}</td><td>{{ m.cvarh }}</td><td>{{ m.vol }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+<ul class="sub">
+  <li><b>Storico</b>: il quantile delle perdite effettivamente osservate, senza ipotesi sulla distribuzione.</li>
+  <li><b>Normale</b>: media e volatilità del campione con la curva normale; sottostima le code.</li>
+  <li><b>Cornish-Fisher</b>: corregge il quantile normale per asimmetria e curtosi del campione.</li>
+  <li><b>t di Student</b>: distribuzione a code pesanti stimata per massima verosimiglianza ({{ gradi_liberta }} gradi di libertà).</li>
+  <li><b>EWMA</b> e <b>GARCH(1,1)</b>: usano la volatilità prevista per domani, quindi descrivono il rischio
+    <i>di oggi</i>. Nel GARCH α = {{ garch.alpha }}, β = {{ garch.beta }} (persistenza {{ garch.persistenza }}),
+    volatilità di lungo periodo {{ garch.lungo }}.</li>
+</ul>
+<p class="sub">Il passaggio da un giorno a {{ orizzonte }} usa la regola della radice del tempo, che vale se i
+rendimenti dei diversi giorni sono indipendenti.</p>
+
+<h2>I modelli funzionano? Backtest del VaR</h2>
+<p>Un modello di rischio va verificato sui dati che non ha visto. Per ciascuno dei {{ giorni_convalida }} giorni
+analizzati il VaR al {{ livello }} è stato calcolato con i soli dati disponibili il giorno prima e confrontato con
+la perdita effettiva. Un buon modello sbaglia in circa {{ 100 - livello_casi }} giorni su 100 (test di
+<b>Kupiec</b>) e non sbaglia a grappoli (test di indipendenza di <b>Christoffersen</b>): p-value sotto 0,05
+indicano che il modello va respinto.</p>
+<div class="grafico">{{ grafici.convalida | safe }}</div>
+<div class="scroll">
+<table>
+  <tr><th>Metodo</th><th>Violazioni attese</th><th>Violazioni</th><th>Frequenza</th><th>p-value Kupiec</th><th>p-value indipendenza</th><th>Ultimi 250 giorni</th><th>Semaforo di Basilea</th></tr>
+  {% for c in convalida %}
+  <tr{% if c.ok %} class="forte"{% endif %}><td>{{ c.nome }}{% if c.ok %} ✓{% endif %}</td><td>{{ c.attese }}</td><td>{{ c.effettive }}</td><td>{{ c.freq }}</td><td>{{ c.kupiec }}</td><td>{{ c.indip }}</td><td>{{ c.ultimi }}</td><td><span class="semaforo {{ c.semaforo }}">{{ c.semaforo }}</span></td></tr>
+  {% endfor %}
+</table>
+</div>
+<p class="sub">In grassetto i metodi che superano entrambi i test. Il semaforo applica le soglie che le banche usano
+per il proprio modello interno sulle ultime 250 giornate: verde fino a 4 violazioni al 99%, giallo da 5 a 9, rosso
+da 10.</p>
+
+<h2>Stress test</h2>
+<p>Il VaR descrive le giornate cattive ma normali. Gli stress test guardano agli eventi estremi: le crisi del
+passato rivissute con il portafoglio di oggi, senza ribilanciare durante la crisi, e scenari ipotetici in cui si
+fissa lo shock sui fattori principali e si stima la reazione degli altri asset con la regressione sui rendimenti
+mensili storici.</p>
+<div class="grafico">{{ grafici.stress | safe }}</div>
+<div class="scroll">
+<table>
+  <tr><th>Scenario</th><th>Tipo</th><th>Rendimento</th><th>Impatto</th><th>Perdita massima</th><th>Asset che pesa di più</th></tr>
+  {% for s in stress %}
+  <tr><td>{{ s.nome }}<br><span class="sub">{{ s.descr }}</span></td><td>{{ s.tipo }}</td><td>{{ s.rend }}</td><td>{{ s.impatto }}</td><td>{{ s.dd }}</td><td>{{ s.peggiore }} ({{ s.peggiore_val }})</td></tr>
+  {% endfor %}
+</table>
+</div>
+<h3>I tre mesi peggiori nei dati</h3>
+<table>
+  <tr><th>Periodo</th><th>Rendimento</th><th>Impatto</th></tr>
+  {% for p in peggiori %}<tr><td>{{ p.da }} – {{ p.a }}</td><td>{{ p.rend }}</td><td>{{ p.impatto }}</td></tr>{% endfor %}
+</table>
+
+<h2>Da dove viene il rischio</h2>
+<p>Il peso di un asset in portafoglio non dice quanto rischio porta. Il contributo alla volatilità e quello al CVaR
+(perdita media dell'asset nei giorni peggiori del portafoglio) mostrano dove si concentra davvero il rischio; in
+grassetto gli asset il cui contributo al CVaR supera di oltre il 30% il peso.</p>
+<div class="grafico">{{ grafici.contributi | safe }}</div>
+<table>
+  <tr><th>Asset</th><th>Peso</th><th>Quota della volatilità</th><th>Quota del CVaR {{ livello }}</th><th>Contributo al CVaR giornaliero</th></tr>
+  {% for c in contributi %}<tr{% if c.forte %} class="forte"{% endif %}><td>{{ c.nome }}</td><td>{{ c.peso }}</td><td>{{ c.vol }}</td><td>{{ c.cvar }}</td><td>{{ c.eur }}</td></tr>{% endfor %}
+</table>
+{% if correlazione %}
+<p>La diversificazione tra azioni e obbligazioni dipende dalla loro correlazione, che cambia nel tempo: quando le
+obbligazioni scendono insieme alle azioni, come nei rialzi dei tassi, la protezione del portafoglio si riduce.</p>
+<div class="grafico">{{ grafici.correlazione | safe }}</div>
+{% endif %}
+
+{% if strategie %}
+<h2>Confronto tra strategie</h2>
+<p>Il portafoglio attuale è confrontato con sei strategie di allocazione sullo stesso periodo (dal {{ inizio_backtest }}),
+con ribilanciamento mensile e costi di transazione. Ogni decisione usa solo i dati disponibili il giorno in cui
+viene presa.</p>
+<div class="grafico">{{ grafici.strategie | safe }}</div>
+<div class="grafico">{{ grafici.drawdown | safe }}</div>
+<div class="scroll">
+<table>
+  <tr><th>Strategia</th>{% for c in colonne %}<th>{{ c }}</th>{% endfor %}</tr>
+  {% for s in strategie %}<tr{% if loop.first %} class="forte"{% endif %}><td>{{ s.nome }}</td>{% for v in s.valori %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}
+</table>
+</div>
+<p class="sub">Sharpe e Sortino al netto di un tasso privo di rischio del {{ risk_free }}; la probabilità che lo Sharpe sia positivo
+(<i>Probabilistic Sharpe Ratio</i>) tiene conto della durata del campione, dell'asimmetria e della curtosi.
+Migliore rapporto rendimento/rischio: <b>{{ migliore_sharpe }}</b>; perdita massima più contenuta: <b>{{ migliore_dd }}</b>.</p>
+<div class="grafico">{{ grafici.rischio_rendimento | safe }}</div>
+<h3>Rispetto al 60/40</h3>
+<p>Regressione dei rendimenti mensili in eccesso di ogni strategia su quelli del 60/40, con errori standard robusti
+(Newey-West). Un alfa con p-value alto non è distinguibile dal caso.</p>
+<table>
+  <tr><th>Strategia</th><th>Alfa annuo</th><th>p-value</th><th>Beta</th><th>R²</th><th>Tracking error</th></tr>
+  {% for c in confronto %}<tr><td>{{ c.nome }}</td><td>{{ c.alfa }}</td><td>{{ c.p }}</td><td>{{ c.beta }}</td><td>{{ c.r2 }}</td><td>{{ c.te }}</td></tr>{% endfor %}
+</table>
+<h3>Rendimenti per anno solare</h3>
+<div class="scroll">
+<table>
+  <tr><th>Anno</th>{% for n in nomi_strategie %}<th>{{ n }}</th>{% endfor %}</tr>
+  {% for r in annuali %}<tr><td>{{ r.anno }}</td>{% for v in r.valori %}<td{% if loop.index0 == r.min %} class="neg"{% elif loop.index0 == r.max %} class="pos"{% endif %}>{{ v }}</td>{% endfor %}</tr>{% endfor %}
+</table>
+</div>
+{% endif %}
+
+<h2>Note metodologiche</h2>
+<div class="note">
+{% if data_note %}<p><b>{{ data_note }}</b></p>{% endif %}
+<p>Rendimenti semplici giornalieri. VaR e CVaR sono perdite stimate sul portafoglio ai pesi attuali; il VaR
+all'orizzonte è ottenuto con la regola della radice del tempo. Le previsioni per il backtest del VaR usano una
+finestra mobile di 500 giorni; il GARCH(1,1) è stimato per massima verosimiglianza e ristimato ogni 250 giorni.
+Gli stress test storici applicano i rendimenti effettivi degli asset nella finestra della crisi; quelli ipotetici
+usano shock istantanei e una regressione lineare sui rendimenti mensili per gli asset non colpiti direttamente.
+I backtest delle strategie deducono {{ costi }} punti base sul controvalore scambiato e non considerano imposte.</p>
+<p>Questo documento ha scopo illustrativo e non costituisce consulenza finanziaria o raccomandazione di
+investimento. I risultati passati e simulati non sono indicativi di quelli futuri.</p>
+</div>
+</body>
+</html>
